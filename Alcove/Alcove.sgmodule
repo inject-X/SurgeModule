@@ -1,0 +1,8 @@
+#!name=Alcove
+#!desc=Active Alcove
+#!category=InjectX
+
+[Script]
+Aclove = type=http-request,pattern=^https:\/\/api\.tryalcove\.com.*$,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/Alcove/Alcove.js,timeout=0,script-update-interval=86400,max-size=-1
+[MITM]
+hostname = api.tryalcove.com
