@@ -17,12 +17,13 @@ const license$ = {
 
 const trial$ = {
     uuid: "35787161-5114-5772-bbdb-cb2821d339d9",
-    started_at: "2099-12-31T00:00:00+01:00",
+    started_at: "2026-02-24T03:36:32+01:00",
+    ends_at: "2099-12-31T00:00:00+01:00",
     active: true
 };
 
 const endpoints = [
-    { pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i, response: trial$, signature: "12476fa503ed65e9ce88fc47c6d0b990380aa43787d2153a794f2a2b90558882"}, // Trial 接口
+    { pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i, response: trial$, signature: "2e1271ac21ee84a5db213ca31870076161472551207db839341b63886fac5e6c"}, // Trial 接口
     { pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i, response: license$, signature: "dd92f03c2e9e400e79a3eded5facd00982b76e9b0de7c86a9aa2ab1aa7d2a89b"}, // Validate 接口
     { pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i, response: license$, signature: "dd92f03c2e9e400e79a3eded5facd00982b76e9b0de7c86a9aa2ab1aa7d2a89b"} // Validate 接口
 ];
