@@ -37,6 +37,7 @@ let alcoveHandler = () => {
                 console.log("Matched Endpoint:", endpoint.pattern);
 
                 $done({
+                    status: 200,
                     body: JSON.stringify(endpoint.response),
                     headers: {
                         ...$response?.headers,
