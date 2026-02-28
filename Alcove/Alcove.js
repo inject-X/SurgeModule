@@ -3,7 +3,6 @@ let url = $request.url;
 const license$ = {
     key: "88888888-8888-8888-8888-888888888888",
     active: true,
-    beta: false,
     name: "InjectX-Team",
     email: "injectxteam@gmail.com",
     limit: 999,
@@ -24,8 +23,8 @@ const trial$ = {
 
 const endpoints = [
     { pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i, response: trial$, signature: "2e1271ac21ee84a5db213ca31870076161472551207db839341b63886fac5e6c"}, // Trial 接口
-    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i, response: license$, signature: "a6c953ccbba493badefc93b475acffa92f506d67b25ce3f0ca83192353d30f17"}, // Validate 接口
-    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i, response: license$, signature: "a6c953ccbba493badefc93b475acffa92f506d67b25ce3f0ca83192353d30f17"} // Validate 接口
+    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i, response: license$, signature: "186c269dd905f963517f6b223c26513d0cdc966c7da5f0f1178abe84248ec6f8"}, // Validate 接口
+    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i, response: license$, signature: "186c269dd905f963517f6b223c26513d0cdc966c7da5f0f1178abe84248ec6f8"} // Validate 接口
 ];
 
 let alcoveHandler = () => {
