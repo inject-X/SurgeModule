@@ -23,9 +23,9 @@ const trial$ = {
 };
 
 const endpoints = [
-    { pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i, response: trial$, signature: "2e1271ac21ee84a5db213ca31870076161472551207db839341b63886fac5e6c"}, // Trial 接口
-    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i, response: license$, signature: "dd92f03c2e9e400e79a3eded5facd00982b76e9b0de7c86a9aa2ab1aa7d2a89b"}, // Validate 接口
-    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i, response: license$, signature: "dd92f03c2e9e400e79a3eded5facd00982b76e9b0de7c86a9aa2ab1aa7d2a89b"} // Validate 接口
+    { pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i, response: trial$, signature: "9aa69091a2683c90186fd2e5f6c08b73332f786b4a9eb5fb8f87eac3889c3bc2"}, // Trial 接口
+    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i, response: license$, signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"}, // Validate 接口
+    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i, response: license$, signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"} // Validate 接口
 ];
 
 let alcoveHandler = () => {
