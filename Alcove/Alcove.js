@@ -24,9 +24,9 @@ const trial$ = {
 
 const endpoints = [
     {
-        pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i,
+        pattern: /^https:\/\/api\.tryalcove\.com\/trial(?:\/([A-F0-9-]+))?$/i,
         response: trial$,
-        signature: "9aa69091a2683c90186fd2e5f6c08b73332f786b4a9eb5fb8f87eac3889c3bc2"
+        signature: "240b9bc5feddaca706e49ee6bd4224b5c02f8cc88ae261438635f358022bde82"
     },
     {
         pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i,
@@ -35,6 +35,11 @@ const endpoints = [
     },
     {
         pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i,
+        response: license$,
+        signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"
+    },
+    {
+        pattern: /^https:\/\/api\.tryalcove\.com\/license\/deactivate/i,
         response: license$,
         signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"
     }
