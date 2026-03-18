@@ -1,12 +1,5 @@
-// ===== 基础工具 =====
-const url = new URL($request.url);
-const path = url.pathname;
-const method = $request.method;
+let url = $request.url || "";
 
-const DEBUG = true; // 🔥 调试开关（上线可改 false）
-const log = (...args) => DEBUG && console.log("[Alcove]", ...args);
-
-// ===== Mock 数据 =====
 const license$ = {
     key: "88888888-8888-8888-8888-888888888888",
     active: true,
@@ -29,80 +22,80 @@ const trial$ = {
     active: true
 };
 
-// ===== 路由表（类似后端 Controller）=====
-const routes = {
-    "GET /license/validate": {
-        name: "Validate",
+const endpoints = [
+    {
+        pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i,
+        response: trial$,
+        signature: "9aa69091a2683c90186fd2e5f6c08b73332f786b4a9eb5fb8f87eac3889c3bc2"
+    },
+    {
+        pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i,
         response: license$,
         signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"
     },
-    "POST /license/activate": {
-        name: "Activate",
+    {
+        pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i,
         response: license$,
         signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"
     }
-};
+];
 
-// ===== 统一响应函数 =====
-function send(response, signature) {
-    return $done({
-        status: 200,
-        body: JSON.stringify(response),
-        headers: {
-            "Content-Type": "application/json",
-            "x-signature": signature
-        }
-    });
+function buildHeaders(signature) {
+    let headers = Object.assign({}, $response.headers || {});
+
+    headers["Content-Type"] = "application/json";
+    if (signature) headers["X-Device-Signature"] = signature;
+
+    delete headers["content-length"];
+    delete headers["Content-Length"];
+    delete headers["content-encoding"];
+    delete headers["Content-Encoding"];
+
+    return headers;
 }
 
-// ===== 主逻辑 =====
-(function handler() {
+function alcoveHandler() {
     try {
-        log("====== 请求开始 ======");
-        log("Method:", method);
-        log("Path:", path);
-        log("Full URL:", url.href);
+        console.log("[Alcove] URL: " + url);
+        console.log("[Alcove] Original Status: " + $response.status);
 
-        // 可选：打印请求头
-        if (DEBUG && $request.headers) {
-            log("Headers:", JSON.stringify($request.headers, null, 2));
+        for (const endpoint of endpoints) {
+            if (endpoint.pattern.test(url)) {
+                console.log("[Alcove] Matched: " + endpoint.pattern);
+
+                $done({
+                    status: 200,
+                    headers: buildHeaders(endpoint.signature),
+                    body: JSON.stringify(endpoint.response)
+                });
+                return;
+            }
         }
 
-        // ===== 1️⃣ 处理 Trial（动态路径）=====
-        if (path.startsWith("/trial/")) {
-            log("✅ 命中 Trial 接口");
-
-            return send(
-                trial$,
-                "9aa69091a2683c90186fd2e5f6c08b73332f786b4a9eb5fb8f87eac3889c3bc2"
-            );
-        }
-
-        // ===== 2️⃣ 处理固定路由 =====
-        const routeKey = `${method} ${path}`;
-        const route = routes[routeKey];
-
-        if (route) {
-            log("✅ 命中:", route.name);
-
-            return send(route.response, route.signature);
-        }
-
-        // ===== 3️⃣ 未匹配 =====
-        log("❌ 未匹配任何接口:", routeKey);
-        log("====== 请求结束（放行）======");
-
-        $done({});
-    } catch (err) {
-        log("💥 脚本异常:", err);
-        log(err.stack);
+        console.log("[Alcove] No match, force 200");
 
         $done({
-            status: 500,
+            status: 200,
+            headers: buildHeaders(""),
+            body: JSON.stringify({
+                success: true,
+                message: "ok"
+            })
+        });
+    } catch (err) {
+        console.log("[Alcove] Error: " + err);
+
+        $done({
+            status: 200,
+            headers: {
+                "Content-Type": "application/json"
+            },
             body: JSON.stringify({
                 error: "script_error",
-                message: err.message
+                message: String(err)
             })
         });
     }
-})();
+}
+
+alcoveHandler();
