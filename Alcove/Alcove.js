@@ -1,5 +1,12 @@
-let url = $request.url;
+// ===== 基础工具 =====
+const url = new URL($request.url);
+const path = url.pathname;
+const method = $request.method;
 
+const DEBUG = true; // 🔥 调试开关（上线可改 false）
+const log = (...args) => DEBUG && console.log("[Alcove]", ...args);
+
+// ===== Mock 数据 =====
 const license$ = {
     key: "88888888-8888-8888-8888-888888888888",
     active: true,
@@ -22,37 +29,80 @@ const trial$ = {
     active: true
 };
 
-const endpoints = [
-    { pattern: /^https:\/\/api\.tryalcove\.com\/trial\/([A-F0-9-]+)$/i, response: trial$, X-Device-Signature: "9aa69091a2683c90186fd2e5f6c08b73332f786b4a9eb5fb8f87eac3889c3bc2"}, // Trial 接口
-    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/validate$/i, response: license$, X-Device-Signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"}, // Validate 接口
-    { pattern: /^https:\/\/api\.tryalcove\.com\/license\/activate$/i, response: license$, X-Device-Signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"} // Validate 接口
-];
-
-let alcoveHandler = () => {
-    try {
-        console.log("Intercepted URL:", url);
-
-        for (const endpoint of endpoints) {
-            if (endpoint.pattern.test(url)) {
-                console.log("Matched Endpoint:", endpoint.pattern);
-
-                $done({
-                    status: 200,
-                    body: JSON.stringify(endpoint.response),
-                    headers: {
-                        ...$response?.headers,
-                        "x-signature": endpoint.signature
-                    }
-                });
-                return;
-            }
-        }
-
-        $done({});
-    } catch (err) {
-        console.error("Error in handler:", err);
-        $done({});
+// ===== 路由表（类似后端 Controller）=====
+const routes = {
+    "GET /license/validate": {
+        name: "Validate",
+        response: license$,
+        signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"
+    },
+    "POST /license/activate": {
+        name: "Activate",
+        response: license$,
+        signature: "f89c5003528c3479e497b4c7851ed038ec0b420eef290cea8d01fe96cb9216fe"
     }
 };
 
-alcoveHandler();
+// ===== 统一响应函数 =====
+function send(response, signature) {
+    return $done({
+        status: 200,
+        body: JSON.stringify(response),
+        headers: {
+            "Content-Type": "application/json",
+            "x-signature": signature
+        }
+    });
+}
+
+// ===== 主逻辑 =====
+(function handler() {
+    try {
+        log("====== 请求开始 ======");
+        log("Method:", method);
+        log("Path:", path);
+        log("Full URL:", url.href);
+
+        // 可选：打印请求头
+        if (DEBUG && $request.headers) {
+            log("Headers:", JSON.stringify($request.headers, null, 2));
+        }
+
+        // ===== 1️⃣ 处理 Trial（动态路径）=====
+        if (path.startsWith("/trial/")) {
+            log("✅ 命中 Trial 接口");
+
+            return send(
+                trial$,
+                "9aa69091a2683c90186fd2e5f6c08b73332f786b4a9eb5fb8f87eac3889c3bc2"
+            );
+        }
+
+        // ===== 2️⃣ 处理固定路由 =====
+        const routeKey = `${method} ${path}`;
+        const route = routes[routeKey];
+
+        if (route) {
+            log("✅ 命中:", route.name);
+
+            return send(route.response, route.signature);
+        }
+
+        // ===== 3️⃣ 未匹配 =====
+        log("❌ 未匹配任何接口:", routeKey);
+        log("====== 请求结束（放行）======");
+
+        $done({});
+    } catch (err) {
+        log("💥 脚本异常:", err);
+        log(err.stack);
+
+        $done({
+            status: 500,
+            body: JSON.stringify({
+                error: "script_error",
+                message: err.message
+            })
+        });
+    }
+})();
