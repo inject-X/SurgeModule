@@ -3,6 +3,6 @@
 #!category=InjectX
 
 [Script]
-Aclove = type=http-response,pattern=^https:\/\/api\.tryalcove\.com.*$,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/Alcove/Alcove.js,timeout=0,script-update-interval=86400,requires-body=1,max-size=0
+Aclove = type=http-request,pattern=^https:\/\/api\.tryalcove\.com.*$,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/Alcove/Alcove.js,timeout=0,script-update-interval=86400,requires-body=1,max-size=0
 [MITM]
 hostname = %APPEND% api.tryalcove.com
