@@ -1,170 +1,160 @@
-/*
- * 随身WiFi 面板 for Surge(实时状态 + 设备详情)
- * 仅在连接指定 Wi-Fi(默认 leshi)时显示数据
- * argument: mode=status|detail&ssid=leshi&host=192.168.1.1&pwd=1
- */
+/* Surge 原生 MiFi 双面板。argument: mode=status|detail&ssid=leshi&host=192.168.1.1&pwd=1 */
 
-const args = {};
-($argument || "").split("&").forEach((s) => {
-  const i = s.indexOf("=");
-  if (i > 0) args[s.slice(0, i)] = decodeURIComponent(s.slice(i + 1));
-});
-const clean = (v, d) => (!v || /\{\{\{.*\}\}\}/.test(v) ? d : v);
-const MODE = clean(args.mode, "status");
-const TARGET_SSID = clean(args.ssid, "leshi");
-const HOST = clean(args.host, "192.168.1.1");
-const SHOW_PWD = clean(args.pwd, "1") === "1";
+const colors = { online: "#087E8B", detail: "#647D8E", warning: "#AD6500", error: "#C54848", idle: "#697386" };
 
-const base = `http://${HOST}/xml_action.cgi?method=get&module=duster&file=`;
-
-function get(name) {
-  return new Promise((resolve) => {
-    $httpClient.get(
-      { url: base + name + Date.now(), timeout: 5, policy: "DIRECT" },
-      (err, resp, data) => {
-        if (err || !data) return resolve(null);
-        try { resolve(JSON.parse(data)); } catch (e) { resolve(null); }
-      }
-    );
-  });
+function numeric(value) {
+  if (value == null || String(value).trim() === "") return null;
+  const result = Number(value);
+  return Number.isFinite(result) ? result : null;
 }
 
-// ---------- 工具函数 ----------
-const n = (v) => Number(v) || 0;
-
-function fmtBytes(b) {
-  b = n(b);
-  const u = ["B", "KB", "MB", "GB", "TB"];
-  let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return (i === 0 ? b.toFixed(0) : b.toFixed(b >= 100 ? 0 : 2)) + " " + u[i];
-}
-const fmtSpeed = (b) => fmtBytes(b) + "/s";
-
-function fmtTime(sec) {
-  sec = n(sec);
-  const d = Math.floor(sec / 86400);
-  const h = Math.floor((sec % 86400) / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  return d ? `${d}天${h}时` : h ? `${h}时${m}分` : `${m}分`;
+function text(value) {
+  return value == null || value === "" ? "—" : String(value).replace(/[\r\n\t]/g, " ");
 }
 
-// 彩色方块进度条(面板文字无法单独着色,用 emoji 方块才有颜色)
-function colorBar(p, len = 10) {
-  p = Math.max(0, Math.min(100, p));
-  const f = Math.round((p / 100) * len);
-  const c = p > 50 ? "🟩" : p > 20 ? "🟨" : "🟥";
-  return c.repeat(f) + "⬜".repeat(len - f);
+function size(value) {
+  let amount = numeric(value);
+  if (amount == null || amount < 0) return "—";
+  const units = ["B", "KiB", "MiB", "GiB", "TiB"];
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit++;
+  }
+  return `${amount.toFixed(unit === 0 ? 0 : unit >= 3 ? 2 : 1)} ${units[unit]}`;
 }
 
-function signalBar(q) {
-  q = Math.max(0, Math.min(5, n(q)));
-  const c = q >= 4 ? "🟩" : q >= 2 ? "🟨" : "🟥";
-  return c.repeat(q) + "⬜".repeat(5 - q);
+function speed(value) {
+  const result = size(value);
+  return result === "—" ? result : `${result}/s`;
 }
 
-// 固件版本只取末尾 V004 这一段,避免换行
-const shortFw = (v) => ((v || "").match(/V\d+\w*$/i) || [v || "-"])[0];
-
-// SSID 为 UTF-16BE 十六进制,如 006c0065... => le...
-function decodeSSID(s) {
-  if (!s || !/^([0-9a-fA-F]{4})+$/.test(s)) return s || "";
-  let out = "";
-  for (let i = 0; i < s.length; i += 4) out += String.fromCharCode(parseInt(s.substr(i, 4), 16));
-  return out;
+function uptime(value) {
+  const seconds = numeric(value);
+  if (seconds == null || seconds < 0) return "—";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 1) return "不足 1 分";
+  if (minutes < 60) return `${minutes} 分`;
+  if (minutes < 1440) return `${Math.floor(minutes / 60)} 时 ${minutes % 60} 分`;
+  return `${Math.floor(minutes / 1440)} 天 ${Math.floor(minutes / 60) % 24} 时`;
 }
 
-const CARRIER = {
-  "CHN TELECOM": "中国电信", "CHN-TELECOM": "中国电信", "CHINA TELECOM": "中国电信", "CHN-CT": "中国电信",
-  "CHN-UNICOM": "中国联通", "CHN UNICOM": "中国联通", "CHINA UNICOM": "中国联通",
-  "CHINA MOBILE": "中国移动", "CMCC": "中国移动",
-};
-// sys_mode 对应关系为推测值,如与实际不符可自行调整
-const SYS_MODE = { "0": "无服务", "3": "2G", "5": "3G", "9": "3G", "15": "3G", "17": "4G", "19": "4G", "22": "5G", "23": "5G" };
-
-// ---------- 实时状态 ----------
-async function statusPanel() {
-  const [st, hp] = await Promise.all([get("json_status_info"), get("json_homepage_info")]);
-  if (!st) return fail();
-
-  const pct = n(st.battery_percent);
-  const charging = st.battery_charging === "1";
-  const sigQ = n(st.signal_quality);
-  const mode = SYS_MODE[st.sys_mode] || "";
-  const maxClients = hp && hp.max_access_number ? `/${hp.max_access_number}` : "";
-
-  const cname = (hp && hp.network_name) || "";
-  const carrier = CARRIER[cname.toUpperCase()] || cname || "未知网络";
-
-  const L = [];
-  L.push(`🔋 ${colorBar(pct, 5)} ${pct}%${charging ? " ⚡" : ""}`);
-  L.push(`📶 ${signalBar(sigQ)} ${st.rssi}dBm`);
-  L.push(`🌐 ${carrier}${mode ? " · " + mode : ""}`);
-  L.push("");
-  L.push(`⬆️ ${fmtSpeed(st.tx_speed)}   ⬇️ ${fmtSpeed(st.rx_speed)}`);
-  L.push(`📊 ↑${fmtBytes(st.tx_byte_all)}   ↓${fmtBytes(st.rx_byte_all)}`);
-  L.push(`👥 ${st.wifi_clients_num}${maxClients} 台 · ⏱ ${fmtTime(st.run_seconds)}`);
-  if (n(st.new_sms_num) > 0) L.push(`✉️ ${st.new_sms_num} 条新短信`);
-  if (st.roaming === "1") L.push(`🌍 漫游中,注意资费`);
-
-  const color = charging || pct > 50 ? "#34C759" : pct > 20 ? "#FF9F0A" : "#FF3B30";
-  $done({
-    title: `随身WiFi · ${hp && hp.device_name ? hp.device_name : "实时"}${mode ? " · " + mode : ""}`,
-    content: L.join("\n"),
-    icon: charging ? "battery.100.bolt" : pct > 75 ? "battery.100" : pct > 50 ? "battery.75" : pct > 25 ? "battery.50" : "battery.25",
-    "icon-color": color,
-  });
+function decodeSSID(value) {
+  if (typeof value !== "string" || !/^(?:[0-9a-f]{4})+$/i.test(value)) return text(value);
+  return text(value.replace(/.{4}/g, unit => String.fromCharCode(parseInt(unit, 16))));
 }
 
-// ---------- 设备详情 ----------
-async function detailPanel() {
-  const [hp, sec] = await Promise.all([
-    get("json_homepage_info"),
-    SHOW_PWD ? get("json_wlan_security_info") : Promise.resolve(null),
-  ]);
-  if (!hp) return fail();
+async function main() {
+  const args = {};
+  for (const pair of (typeof $argument === "string" ? $argument : "").split("&")) {
+    const separator = pair.indexOf("=");
+    if (separator < 0) continue;
+    args[pair.slice(0, separator)] = decodeURIComponent(pair.slice(separator + 1).replace(/\+/g, " "));
+  }
+  const mode = args.mode || "status";
+  const ssid = args.ssid || "leshi";
+  const host = (args.host || "192.168.1.1").replace(/\/+$/, "");
+  if (!/^(?:https?:\/\/)?[a-z0-9.-]+(?::\d{1,5})?$/i.test(host) || !["status", "detail"].includes(mode)) {
+    throw new Error("检查模块的 HOST 和 mode 参数");
+  }
+  if (typeof $network === "undefined" || !$network.wifi || $network.wifi.ssid !== ssid) {
+    $done({ title: "MiFi 未连接", content: `连接 ${text(ssid)} 后刷新面板`, icon: "wifi.slash", "icon-color": colors.idle });
+    return;
+  }
 
-  const L = [];
-  const name = decodeSSID(hp.ssid) || TARGET_SSID;
-  const key = SHOW_PWD && sec && sec[sec.mode] && sec[sec.mode].key;
-  L.push(`📡 ${name}${hp.wlan_enable === "0" ? "(已关闭)" : ""}${key ? "  🔑 " + key : ""}`);
-  L.push("");
-  L.push(`📱 ${hp.device_name || "-"} · ${shortFw(hp.sw_version)}`);
-  L.push(`🔢 ${hp.serial_number || "-"}`);
-  L.push(`🏷 ${hp.mac || "-"}`);
-  L.push("");
-  L.push(`🌐 ${hp.wan_ip || "无 IP"}`);
-  L.push(`🏠 ${hp.lan_domain || hp.lan_ip || HOST}`);
-  const simOk = hp.sim_status === "0" && hp.pin_status === "0";
-  L.push(`💳 SIM ${simOk ? "正常" : `异常(${hp.sim_status}/${hp.pin_status})`}`);
-
-  $done({
-    title: "随身WiFi · 设备详情",
-    content: L.join("\n"),
-    icon: "wifi.router.fill",
-    "icon-color": simOk ? "#0A84FF" : "#FF9F0A",
-  });
-}
-
-function fail() {
-  $done({
-    title: "随身WiFi",
-    content: `⚠️ 无法获取设备信息\n请确认 ${HOST} 可访问`,
-    icon: "exclamationmark.triangle.fill",
-    "icon-color": "#FF9500",
-  });
-}
-
-// ---------- 入口 ----------
-(async () => {
-  const ssid = ($network.wifi && $network.wifi.ssid) || "";
-  if (ssid !== TARGET_SSID) {
-    return $done({
-      title: MODE === "detail" ? "随身WiFi · 设备详情" : "随身WiFi · 实时",
-      content: `📵 未连接「${TARGET_SSID}」\n当前网络: ${ssid || "非 Wi-Fi / 未连接"}`,
-      icon: "antenna.radiowaves.left.and.right.slash",
-      "icon-color": "#8E8E93",
+  const base = /^https?:\/\//i.test(host) ? host : `http://${host}`;
+  function request(name) {
+    return new Promise((resolve, reject) => {
+      $httpClient.get({
+        url: `${base}/xml_action.cgi?method=get&module=duster&file=json_${name}${Date.now()}`,
+        timeout: 4,
+        policy: "DIRECT",
+        "auto-redirect": false,
+      }, (error, response, body) => {
+        if (error) return reject(new Error("无法访问设备，请检查连接后刷新"));
+        if (response && [401, 403].includes(Number(response.status))) return reject(new Error("请先登录设备后台，再刷新面板"));
+        if (!response || Number(response.status) !== 200) return reject(new Error("设备接口暂不可用，请稍后刷新"));
+        if (/^\s*(UNAUTHORIZED|KICKOFF)\s*$/.test(body)) return reject(new Error("请先登录设备后台，再刷新面板"));
+        try {
+          const data = JSON.parse(body);
+          const fields = { status_info: ["rx_speed", "signal_quality", "wifi_clients_num"], homepage_info: ["device_name", "ssid", "connect_disconnect"], wlan_security_info: ["mode"] };
+          if (!data || typeof data !== "object" || Array.isArray(data) || !fields[name].some(field => Object.prototype.hasOwnProperty.call(data, field))) {
+            throw new Error("invalid response");
+          }
+          resolve(data);
+        } catch (_) {
+          reject(new Error("设备返回异常，请登录后台后刷新"));
+        }
+      });
     });
   }
-  MODE === "detail" ? await detailPanel() : await statusPanel();
-})();
+
+  if (mode === "status") {
+    const [status, home] = await Promise.all([request("status_info"), request("homepage_info").catch(() => null)]);
+    const carrier = home && ({ "CHN TELECOM": "中国电信", "CHN MOBILE": "中国移动", "CHINA MOBILE": "中国移动", "CHN UNICOM": "中国联通", "CHINA UNICOM": "中国联通" }[home.network_name] || text(home.network_name));
+    // 此设备 /js/base.js 的映射：17=4G，5/15=3G，3=GSM。
+    const radio = { "17": "4G", "5": "3G", "15": "3G", "3": "GSM" }[status.sys_mode];
+    let problem = "";
+    if (home) {
+      if (home.sim_status != null && home.sim_status !== "0") problem = "SIM 卡不可用";
+      else if (home.pin_status != null && home.pin_status !== "0") problem = "SIM 卡待解锁";
+      else if (home.connect_disconnect === "disabled") problem = "蜂窝已关闭";
+      else if (numeric(status.signal_quality) === 0) problem = "无蜂窝信号";
+      else if (String(status.sys_mode) === "0" || home.wan_ip === "" || home.wan_ip === "0.0.0.0") problem = "蜂窝未连接";
+    }
+    const received = numeric(status.rx_byte_all);
+    const transmitted = numeric(status.tx_byte_all);
+    const total = received != null && received >= 0 && transmitted != null && transmitted >= 0 ? received + transmitted : null;
+    const signal = numeric(status.signal_quality);
+    const maxSignal = numeric(status.total_signal_quality);
+    const signalLabel = signal != null && maxSignal > 0 && signal >= 0 && signal <= maxSignal ? `${signal}/${maxSignal}` : "—";
+    const rssi = numeric(status.rssi);
+    const percent = numeric(status.battery_percent);
+    const battery = percent != null && percent >= 0 && percent <= 100 ? `${percent}%` : "—";
+    const charging = status.battery_charging === "1" || status.battery_charge === "1";
+    const hasBattery = status.battery_connect !== "0";
+    const lowBattery = hasBattery && percent != null && percent >= 0 && percent <= 20;
+    const clients = numeric(status.wifi_clients_num);
+    const lines = [
+      `↓ ${speed(status.rx_speed)}    ↑ ${speed(status.tx_speed)}`,
+      `累计流量 ${size(total)}`,
+      "",
+      `信号 ${signalLabel}${rssi != null && rssi < 0 ? `    ${rssi} dBm` : ""}`,
+      `电量 ${hasBattery ? battery : "未安装电池"}${hasBattery && charging ? "  充电中" : lowBattery ? "  电量偏低" : ""}`,
+      `已接入 ${clients != null && clients >= 0 ? `${clients} 台` : "—"}`,
+    ];
+    if (!home) lines.push("网络信息暂不可用");
+    else if (home.roaming === "1" || status.roaming === "1") lines.push("当前正在漫游");
+    $done({
+      title: problem || (home ? `${carrier === "—" ? "蜂窝网络" : carrier}  ${radio || "制式未知"}` : "MiFi 状态"),
+      content: lines.join("\n"),
+      icon: "antenna.radiowaves.left.and.right",
+      "icon-color": problem || !home || lowBattery || (signal != null && signal <= 1) ? colors.warning : colors.online,
+    });
+    return;
+  }
+
+  const [home, status, security] = await Promise.all([
+    request("homepage_info"),
+    request("status_info").catch(() => null),
+    request("wlan_security_info").catch(() => null),
+  ]);
+  const lines = [];
+  const securityMode = security && security.mode;
+  const encryption = { Mixed: "WPA / WPA2", "WPA2-WPA3": "WPA2 / WPA3", "WPA2-PSK": "WPA2", "WPA-PSK": "WPA", "WPA3-SAE": "WPA3", "WAPI-PSK": "WAPI", Open: "开放网络", None: "开放网络" };
+  if (args.pwd === "1") {
+    const active = security && security[securityMode];
+    const password = active && (active.key || active.key1);
+    lines.push(`密码 ${security ? password ? text(password) : ["Open", "None"].includes(securityMode) ? "无需密码" : "不可用" : "读取失败，请登录后台"}`);
+  }
+  lines.push(`加密 ${security ? encryption[securityMode] || text(securityMode) : "读取失败"}`, "", `设备 ${text(home.device_name || home.device_model || home.hw_version)}`, `后台 ${text(home.lan_ip || host)}`, `运行 ${uptime(status && status.run_seconds)}`);
+  if (home.wlan_enable === "0") lines.push("Wi-Fi 已关闭");
+  $done({
+    title: decodeSSID((security && security.ssid) || home.ssid),
+    content: lines.join("\n"),
+    icon: "wifi",
+    "icon-color": !security || home.wlan_enable === "0" ? colors.warning : colors.detail,
+  });
+}
+
+main().catch(error => $done({ title: "MiFi 读取失败", content: error instanceof URIError ? "SSID 参数编码有误，请检查模块参数" : error.message, icon: "exclamationmark.circle", "icon-color": colors.error }));
