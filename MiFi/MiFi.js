@@ -93,17 +93,16 @@ async function statusPanel() {
   const mode = SYS_MODE[st.sys_mode] || "";
   const maxClients = hp && hp.max_access_number ? `/${hp.max_access_number}` : "";
 
+  const cname = (hp && hp.network_name) || "";
+  const carrier = CARRIER[cname.toUpperCase()] || cname || "未知网络";
+
   const L = [];
-  L.push(`🔋 ${colorBar(pct)} ${pct}%${charging ? " ⚡" : ""}`);
-  L.push(`📶 ${signalBar(sigQ)} ${st.rssi}dBm${mode ? " · " + mode : ""}`);
-  if (hp) {
-    const cname = hp.network_name || "";
-    const carrier = CARRIER[cname.toUpperCase()] || cname || "未知网络";
-    L.push(`🌐 ${carrier} · ${hp.wan_ip || "无 IP"}`);
-  }
+  L.push(`🔋 ${colorBar(pct, 5)} ${pct}%${charging ? " ⚡" : ""}`);
+  L.push(`📶 ${signalBar(sigQ)} ${st.rssi}dBm`);
+  L.push(`🌐 ${carrier}${mode ? " · " + mode : ""}`);
+  L.push("");
   L.push(`⬆️ ${fmtSpeed(st.tx_speed)}   ⬇️ ${fmtSpeed(st.rx_speed)}`);
-  L.push(`📊 ↑${fmtBytes(st.tx_byte_all)}  ↓${fmtBytes(st.rx_byte_all)}`);
-  L.push(`🚀 峰值 ↑${fmtSpeed(st.tx_max_speed)}  ↓${fmtSpeed(st.rx_max_speed)}`);
+  L.push(`📊 ↑${fmtBytes(st.tx_byte_all)}   ↓${fmtBytes(st.rx_byte_all)}`);
   L.push(`👥 ${st.wifi_clients_num}${maxClients} 台 · ⏱ ${fmtTime(st.run_seconds)}`);
   if (n(st.new_sms_num) > 0) L.push(`✉️ ${st.new_sms_num} 条新短信`);
   if (st.roaming === "1") L.push(`🌍 漫游中,注意资费`);
@@ -128,13 +127,16 @@ async function detailPanel() {
   const L = [];
   const name = decodeSSID(hp.ssid) || TARGET_SSID;
   const key = SHOW_PWD && sec && sec[sec.mode] && sec[sec.mode].key;
-  L.push(`📡 ${name}${hp.wlan_enable === "0" ? "(已关闭)" : ""}${key ? "  ·  🔑 " + key : ""}`);
-  L.push(`📱 ${hp.device_name || "-"} · 固件 ${shortFw(hp.sw_version)}`);
-  L.push(`🔢 SN ${hp.serial_number || "-"}`);
-  L.push(`🏷 MAC ${hp.mac || "-"}`);
-  L.push(`🏠 ${hp.lan_domain || "-"} · ${hp.lan_ip || HOST}`);
+  L.push(`📡 ${name}${hp.wlan_enable === "0" ? "(已关闭)" : ""}${key ? "  🔑 " + key : ""}`);
+  L.push("");
+  L.push(`📱 ${hp.device_name || "-"} · ${shortFw(hp.sw_version)}`);
+  L.push(`🔢 ${hp.serial_number || "-"}`);
+  L.push(`🏷 ${hp.mac || "-"}`);
+  L.push("");
+  L.push(`🌐 ${hp.wan_ip || "无 IP"}`);
+  L.push(`🏠 ${hp.lan_domain || hp.lan_ip || HOST}`);
   const simOk = hp.sim_status === "0" && hp.pin_status === "0";
-  L.push(`💳 SIM ${simOk ? "正常" : `异常(${hp.sim_status}/${hp.pin_status})`} · ${hp.connect_disconnect === "cellular" ? "蜂窝联网" : hp.connect_disconnect || "-"}`);
+  L.push(`💳 SIM ${simOk ? "正常" : `异常(${hp.sim_status}/${hp.pin_status})`}`);
 
   $done({
     title: "随身WiFi · 设备详情",
