@@ -1,7 +1,7 @@
 #!name=随身WiFi面板
 #!desc=连接指定 Wi-Fi(默认 leshi)时,显示「实时状态」和「设备详情」两个面板
 #!category=Panel
-#!arguments=SSID:leshi,HOST:192.168.1.1,SHOW_PWD:1,INTERVAL:5
+#!arguments=SSID:leshi,HOST:192.168.100.1,SHOW_PWD:1,INTERVAL:5
 #!arguments-desc=SSID: 触发面板的Wi-Fi名称\nHOST: 随身WiFi后台地址\nSHOW_PWD: 1=详情面板显示Wi-Fi密码(默认显示,0为隐藏)\nINTERVAL: 实时状态刷新间隔(秒)
 
 [Panel]
