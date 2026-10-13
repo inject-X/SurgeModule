@@ -1,0 +1,14 @@
+#!name=随身WiFi面板
+#!desc=连接指定 Wi-Fi(默认 leshi)时,显示「实时状态」和「设备详情」两个面板
+#!category=Panel
+#!arguments=SSID:leshi,HOST:192.168.1.1,SHOW_PWD:1,INTERVAL:5
+#!arguments-desc=SSID: 触发面板的Wi-Fi名称\nHOST: 随身WiFi后台地址\nSHOW_PWD: 1=详情面板显示Wi-Fi密码(默认显示,0为隐藏)\nINTERVAL: 实时状态刷新间隔(秒)
+
+[Panel]
+MiFiStatus = script-name=MiFiStatus,update-interval={{{INTERVAL}}}
+MiFiDetail = script-name=MiFiDetail,update-interval=60
+
+[Script]
+# 把 script-path 换成你自己托管 MiFi.js 的地址(GitHub raw / iCloud / 本地文件均可)
+MiFiStatus = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/Surge/main/MiFi.js,argument=mode=status&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
+MiFiDetail = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/Surge/main/MiFi.js,argument=mode=detail&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
