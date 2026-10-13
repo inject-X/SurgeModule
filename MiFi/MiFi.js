@@ -49,16 +49,22 @@ function fmtTime(sec) {
   return d ? `${d}天${h}时` : h ? `${h}时${m}分` : `${m}分`;
 }
 
-function bar(p, len = 10) {
-  const f = Math.round((Math.max(0, Math.min(100, p)) / 100) * len);
-  return "█".repeat(f) + "░".repeat(len - f);
+// 彩色方块进度条(面板文字无法单独着色,用 emoji 方块才有颜色)
+function colorBar(p, len = 10) {
+  p = Math.max(0, Math.min(100, p));
+  const f = Math.round((p / 100) * len);
+  const c = p > 50 ? "🟩" : p > 20 ? "🟨" : "🟥";
+  return c.repeat(f) + "⬜".repeat(len - f);
 }
 
-function signalBars(q) {
+function signalBar(q) {
   q = Math.max(0, Math.min(5, n(q)));
-  const lv = ["▁", "▃", "▅", "▇", "█"];
-  return lv.map((c, i) => (i < q ? c : "·")).join("");
+  const c = q >= 4 ? "🟩" : q >= 2 ? "🟨" : "🟥";
+  return c.repeat(q) + "⬜".repeat(5 - q);
 }
+
+// 固件版本只取末尾 V004 这一段,避免换行
+const shortFw = (v) => ((v || "").match(/V\d+\w*$/i) || [v || "-"])[0];
 
 // SSID 为 UTF-16BE 十六进制,如 006c0065... => le...
 function decodeSSID(s) {
@@ -88,23 +94,23 @@ async function statusPanel() {
   const maxClients = hp && hp.max_access_number ? `/${hp.max_access_number}` : "";
 
   const L = [];
-  L.push(`🔋 ${bar(pct)} ${pct}%${charging ? "  ⚡充电中" : st.battery_connect === "0" ? "  🔌无电池" : ""}`);
-  L.push(`📶 ${signalBars(sigQ)} ${sigQ}/5 · ${st.rssi}dBm${mode ? " · " + mode : ""}`);
+  L.push(`🔋 ${colorBar(pct)} ${pct}%${charging ? " ⚡" : ""}`);
+  L.push(`📶 ${signalBar(sigQ)} ${st.rssi}dBm${mode ? " · " + mode : ""}`);
   if (hp) {
     const cname = hp.network_name || "";
     const carrier = CARRIER[cname.toUpperCase()] || cname || "未知网络";
     L.push(`🌐 ${carrier} · ${hp.wan_ip || "无 IP"}`);
   }
-  L.push(`⬆️ ${fmtSpeed(st.tx_speed)}    ⬇️ ${fmtSpeed(st.rx_speed)}`);
+  L.push(`⬆️ ${fmtSpeed(st.tx_speed)}   ⬇️ ${fmtSpeed(st.rx_speed)}`);
+  L.push(`📊 ↑${fmtBytes(st.tx_byte_all)}  ↓${fmtBytes(st.rx_byte_all)}`);
   L.push(`🚀 峰值 ↑${fmtSpeed(st.tx_max_speed)}  ↓${fmtSpeed(st.rx_max_speed)}`);
-  L.push(`📊 累计 ↑${fmtBytes(st.tx_byte_all)}  ↓${fmtBytes(st.rx_byte_all)}`);
-  L.push(`👥 ${st.wifi_clients_num}${maxClients} 台设备 · ⏱ ${fmtTime(st.run_seconds)}`);
+  L.push(`👥 ${st.wifi_clients_num}${maxClients} 台 · ⏱ ${fmtTime(st.run_seconds)}`);
   if (n(st.new_sms_num) > 0) L.push(`✉️ ${st.new_sms_num} 条新短信`);
   if (st.roaming === "1") L.push(`🌍 漫游中,注意资费`);
 
   const color = charging || pct > 50 ? "#34C759" : pct > 20 ? "#FF9F0A" : "#FF3B30";
   $done({
-    title: `随身WiFi · 实时${hp && hp.device_name ? " · " + hp.device_name : ""}`,
+    title: `随身WiFi · ${hp && hp.device_name ? hp.device_name : "实时"}${mode ? " · " + mode : ""}`,
     content: L.join("\n"),
     icon: charging ? "battery.100.bolt" : pct > 75 ? "battery.100" : pct > 50 ? "battery.75" : pct > 25 ? "battery.50" : "battery.25",
     "icon-color": color,
@@ -121,18 +127,14 @@ async function detailPanel() {
 
   const L = [];
   const name = decodeSSID(hp.ssid) || TARGET_SSID;
-  L.push(`📡 Wi-Fi: ${name}${hp.wlan_enable === "0" ? "(已关闭)" : ""}`);
-  if (SHOW_PWD && sec) {
-    const key = sec[sec.mode] && sec[sec.mode].key;
-    if (key) L.push(`🔑 密码: ${key}`);
-  }
-  L.push(`📱 型号: ${hp.device_name || "-"}`);
-  L.push(`🧩 固件: ${hp.sw_version || "-"}`);
-  L.push(`🔢 序列号: ${hp.serial_number || "-"}`);
-  L.push(`🏷 MAC: ${hp.mac || "-"}`);
-  L.push(`🏠 后台: ${hp.lan_domain || hp.lan_ip} (${hp.lan_ip || HOST})`);
+  const key = SHOW_PWD && sec && sec[sec.mode] && sec[sec.mode].key;
+  L.push(`📡 ${name}${hp.wlan_enable === "0" ? "(已关闭)" : ""}${key ? "  ·  🔑 " + key : ""}`);
+  L.push(`📱 ${hp.device_name || "-"} · 固件 ${shortFw(hp.sw_version)}`);
+  L.push(`🔢 SN ${hp.serial_number || "-"}`);
+  L.push(`🏷 MAC ${hp.mac || "-"}`);
+  L.push(`🏠 ${hp.lan_domain || "-"} · ${hp.lan_ip || HOST}`);
   const simOk = hp.sim_status === "0" && hp.pin_status === "0";
-  L.push(`💳 SIM: ${simOk ? "正常" : `异常(sim=${hp.sim_status}, pin=${hp.pin_status})`} · 联网: ${hp.connect_disconnect === "cellular" ? "蜂窝" : hp.connect_disconnect || "-"}`);
+  L.push(`💳 SIM ${simOk ? "正常" : `异常(${hp.sim_status}/${hp.pin_status})`} · ${hp.connect_disconnect === "cellular" ? "蜂窝联网" : hp.connect_disconnect || "-"}`);
 
   $done({
     title: "随身WiFi · 设备详情",
