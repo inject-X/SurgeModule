@@ -1,4 +1,4 @@
-/* Surge 原生 MiFi 双面板。argument: mode=status|detail&ssid=leshi&host=192.168.1.1&pwd=1 */
+/* Surge 原生 MiFi 双面板。argument: mode=status|detail&ssid=leshi&host=192.168.100.1&pwd=1 */
 
 const colors = { online: "#087E8B", detail: "#647D8E", warning: "#AD6500", error: "#C54848", idle: "#697386" };
 
@@ -53,7 +53,7 @@ async function main() {
   }
   const mode = args.mode || "status";
   const ssid = args.ssid || "leshi";
-  const host = (args.host || "192.168.1.1").replace(/\/+$/, "");
+  const host = (args.host || "192.168.100.1").replace(/\/+$/, "");
   if (!/^(?:https?:\/\/)?[a-z0-9.-]+(?::\d{1,5})?$/i.test(host) || !["status", "detail"].includes(mode)) {
     throw new Error("检查模块的 HOST 和 mode 参数");
   }
