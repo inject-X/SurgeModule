@@ -10,5 +10,5 @@ MiFiDetail = script-name=MiFiDetail,update-interval=60
 
 [Script]
 # 把 script-path 换成你自己托管 MiFi.js 的地址(GitHub raw / iCloud / 本地文件均可)
-MiFiStatus = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/Surge/main/MiFi.js,argument=mode=status&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
-MiFiDetail = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/Surge/main/MiFi.js,argument=mode=detail&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
+MiFiStatus = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=mode=status&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
+MiFiDetail = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=mode=detail&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
