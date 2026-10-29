@@ -1,0 +1,9 @@
+#!name=SideStore Local Loopback
+#!desc=使用 Surge 替代 LocalDevVPN
+
+[General]
+ipv6-vif = disabled
+tun-included-routes = %INSERT% 10.7.0.1/32
+
+[IP Rewrite]
+10.7.0.1 = reflect
