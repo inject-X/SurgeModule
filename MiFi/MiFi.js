@@ -4,10 +4,10 @@
  */
 
 const COLORS = {
-  online: "#0D9488",
-  detail: "#2563EB",
-  warning: "#D97706",
-  error: "#DC2626",
+  online: "#22C55E",
+  detail: "#007AFF",
+  warning: "#FF9500",
+  error: "#FF3B30",
   idle: "#8E8E93",
 };
 
@@ -74,23 +74,11 @@ const RADIO_MODE = {
   "3": "2G",
 };
 
-const LTE_DL_BW = {
-  "0": "1.4MHz",
-  "1": "3MHz",
-  "2": "5MHz",
-  "3": "10MHz",
-  "4": "15MHz",
-  "5": "20MHz",
-  "10": "10MHz",
-  "15": "15MHz",
-  "20": "20MHz",
-};
-
 const PIN_ERROR = {
-  "1": "SIM 卡需输入 PIN",
-  "2": "SIM 卡需输入 PUK",
-  "3": "SIM 卡已锁定",
-  "4": "SIM 卡状态异常",
+  "1": "SIM 需 PIN",
+  "2": "SIM 需 PUK",
+  "3": "SIM 已锁定",
+  "4": "SIM 卡异常",
 };
 
 const WIFI_SECURITY = {
@@ -104,6 +92,10 @@ const WIFI_SECURITY = {
   Open: "开放网络",
   None: "开放网络",
 };
+
+function row(label, value) {
+  return `${label}\u3000${value}`;
+}
 
 function numeric(value) {
   if (value == null || String(value).trim() === "") return null;
@@ -126,13 +118,23 @@ function formatBytes(value) {
     amount /= 1024;
     idx++;
   }
-  const decimals = idx === 0 ? 0 : idx >= 3 ? 2 : 1;
+  let decimals = 1;
+  if (idx === 0 || amount >= 100) decimals = 0;
+  else if (idx >= 3 && amount < 10) decimals = 2;
   return `${amount.toFixed(decimals)} ${units[idx]}`;
 }
 
-function formatCompactBytes(value) {
-  const full = formatBytes(value);
-  return full === "—" ? full : full.replace(" ", "");
+function formatShortBytes(value) {
+  let amount = numeric(value);
+  if (amount == null || amount < 0) return "—";
+  const units = ["B", "K", "M", "G", "T"];
+  let idx = 0;
+  while (amount >= 1024 && idx < units.length - 1) {
+    amount /= 1024;
+    idx++;
+  }
+  if (idx <= 1 || amount >= 100) return `${Math.round(amount)}${units[idx]}`;
+  return `${amount.toFixed(1).replace(/\.0$/, "")}${units[idx]}`;
 }
 
 function formatSpeed(value) {
@@ -143,17 +145,17 @@ function formatSpeed(value) {
 function formatUptime(value) {
   const seconds = numeric(value);
   if (seconds == null || seconds < 0) return "—";
+  if (seconds < 60) return `${Math.floor(seconds)}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 1) return `${Math.floor(seconds)} 秒`;
-  if (minutes < 60) return `${minutes} 分`;
+  if (minutes < 60) return `${minutes}m`;
   if (minutes < 1440) {
     const h = Math.floor(minutes / 60);
     const m = minutes % 60;
-    return m > 0 ? `${h} 时 ${m} 分` : `${h} 时`;
+    return m > 0 ? `${h}h ${m}m` : `${h}h`;
   }
   const d = Math.floor(minutes / 1440);
   const h = Math.floor((minutes % 1440) / 60);
-  return `${d} 天 ${h} 时`;
+  return h > 0 ? `${d}d ${h}h` : `${d}d`;
 }
 
 function decodeUniHex(value) {
@@ -166,7 +168,6 @@ function decodeUniHex(value) {
   for (let i = 0; i < trimmed.length; i += 4) {
     codes.push(parseInt(trimmed.slice(i, i + 4), 16));
   }
-  // Duster UniEncode 编码中 ASCII 必为 00xx，汉字主要落在常见 BMP 区间；避免将纯明文如 "1234" 误解码
   const plausible = codes.every(
     (c) => (c >= 0x20 && c <= 0x7e) || (c >= 0x2000 && c <= 0x9fff) || (c >= 0xff00 && c <= 0xffef)
   );
@@ -195,37 +196,29 @@ function parseSimSummary(mss) {
   if (!mss || !Array.isArray(mss.sim_list) || mss.sim_list.length === 0) return null;
   const activeId = String(mss.current_sim_id ?? mss.sole_sim_id ?? "");
   const smartSwitch = String(mss.switch_mode) === "0";
-  const activeSim = mss.sim_list.find((s) => String(s.sim_id) === activeId);
-  const activeLabel = activeSim
-    ? `${simSlotName(activeSim.sim_id, activeSim.sim_name, false)}${smartSwitch ? "(智选)" : ""}`
-    : smartSwitch
-      ? "智能选网"
-      : "";
+  const presentSims = mss.sim_list.filter((s) => String(s.sim_present) === "1");
+  const activeSim = presentSims.find((s) => String(s.sim_id) === activeId) || mss.sim_list.find((s) => String(s.sim_id) === activeId);
 
-  // 排序：外置卡优先或当前激活卡优先，便于一眼查看全部卡槽
-  const ordered = [...mss.sim_list].sort((a, b) => {
-    const aActive = String(a.sim_id) === activeId ? 0 : 1;
-    const bActive = String(b.sim_id) === activeId ? 0 : 1;
-    if (aActive !== bActive) return aActive - bActive;
-    return Number(a.sim_id) - Number(b.sim_id);
-  });
+  const activeSlotFull = activeSim ? simSlotName(activeSim.sim_id, activeSim.sim_name, false) : "";
+  const activeLabel = activeSlotFull ? (smartSwitch ? `智选·${activeSlotFull}` : activeSlotFull) : smartSwitch ? "智能选网" : "";
 
-  const parts = [];
-  for (const sim of ordered) {
-    const isActive = String(sim.sim_id) === activeId;
-    const slot = simSlotName(sim.sim_id, sim.sim_name, true);
-    if (String(sim.sim_present) !== "1") {
-      if (String(sim.sim_id) === "2") parts.push(`${slot}空`);
-      continue;
-    }
-    const prefix = String(sim.sim_iccid || "").slice(0, 6);
-    const op = SHORT_CARRIER_BY_ICCID[prefix] || "";
-    const banned = String(sim.sim_banned) === "1" ? "(禁)" : "";
-    parts.push(`${slot}${op}${banned}${isActive ? "✓" : ""}`);
-  }
+  if (presentSims.length === 0) return { activeLabel, slotsLine: null };
 
-  const slotsLine = parts.length > 0 ? `${smartSwitch ? "智选 · " : ""}${parts.join(" · ")}` : null;
-  return { activeLabel, slotsLine, count: mss.sim_list.length };
+  const activeSlotShort = activeSim ? simSlotName(activeSim.sim_id, activeSim.sim_name, true) : "当前";
+  const activePrefix = String((activeSim && activeSim.sim_iccid) || "").slice(0, 6);
+  const activeOp = SHORT_CARRIER_BY_ICCID[activePrefix] || "";
+  const primaryTag = `${smartSwitch ? "智选 " : ""}${activeSlotShort}${activeOp}`;
+
+  const backups = presentSims
+    .filter((s) => String(s.sim_id) !== activeId && String(s.sim_banned) !== "1")
+    .map((s) => {
+      const p = String(s.sim_iccid || "").slice(0, 6);
+      return SHORT_CARRIER_BY_ICCID[p] || simSlotName(s.sim_id, s.sim_name, true);
+    });
+
+  const backupLabel = backups.length > 0 ? `${smartSwitch ? "备" : "备卡"} ${backups.join("/")}` : "";
+  const slotsLine = backupLabel ? `${primaryTag} · ${backupLabel}` : primaryTag;
+  return { activeLabel, slotsLine };
 }
 
 function parseLteMetrics(eng) {
@@ -233,15 +226,10 @@ function parseLteMetrics(eng) {
   const lte = eng.lte;
   if (!lte.band && lte.rsrp == null && lte.sinr == null) return null;
   const band = cleanText(lte.band, "");
-  const bw = LTE_DL_BW[String(lte.dlBandwidth ?? "")] || "";
   const rawRsrp = numeric(lte.rsrp);
   const rsrp = rawRsrp == null ? null : rawRsrp < 0 ? rawRsrp : rawRsrp - 141;
-  const rawRsrq = numeric(lte.rsrq);
-  const rsrq = rawRsrq == null ? null : rawRsrq < 0 ? rawRsrq : -20 + rawRsrq / 2;
   const sinr = numeric(lte.sinr);
-  const pci = cleanText(lte.phyCellId, "");
-  const earfcn = cleanText(lte.dlEuArfcn, "");
-  return { band, bw, rsrp, rsrq, sinr, pci, earfcn };
+  return { band, rsrp, sinr };
 }
 
 function hasValidGlobalIPv6(addr) {
@@ -253,7 +241,7 @@ function hasValidGlobalIPv6(addr) {
   return true;
 }
 
-// 纯 JS MD5 (RFC 1321)，用于设备要求 Digest 鉴权时自动无感登录
+// 纯 JS MD5 (RFC 1321)，仅当设备要求 Digest 鉴权时自动无感登录
 function md5(input) {
   const utf8 = unescape(encodeURIComponent(String(input)));
   const words = [];
@@ -403,7 +391,6 @@ async function main() {
     }
   }
 
-  // 智能网络环境预检：兼顾 iOS SSID 识别、macOS 无定位权限时网关识别、以及 USB 共享模式
   const net = typeof $network === "object" && $network ? $network : {};
   const wifiSsid = net.wifi && net.wifi.ssid ? String(net.wifi.ssid).trim() : "";
   const routerIp = net.v4 && net.v4.primaryRouter ? String(net.v4.primaryRouter).trim() : "";
@@ -428,7 +415,6 @@ async function main() {
 
   const ssidConfirmed = Boolean(targetSsid && targetSsid !== "*" && wifiSsid && wifiSsid === targetSsid);
 
-  // Digest 鉴权会话状态（仅当设备返回未授权时按需触发）
   let digestSession = null;
   let loginPromise = null;
 
@@ -462,7 +448,6 @@ async function main() {
 
       digestSession = { realm, nonce, qop, nc: 1 };
       const loginDigest = buildDigestAuth("/cgi/protected.cgi");
-      // login.cgi 固定使用 nc=00000001 校验 response 参数
       const ha1 = md5(`${user}:${realm}:${adminPwd}`);
       const ha2 = md5("GET:/cgi/protected.cgi");
       const loginResHash = md5(`${ha1}:${nonce}:00000001:${loginDigest.cnonce}:${qop}:${ha2}`);
@@ -514,7 +499,7 @@ async function main() {
     return data;
   }
 
-  // ==================== 面板 1：实时状态 ====================
+  // ==================== 面板 1：蜂窝实时状态（4行清透布局） ====================
   if (mode === "status") {
     let status, home, eng, mss;
     try {
@@ -528,7 +513,6 @@ async function main() {
         throw new Error("NOT_MIFI");
       }
     } catch (err) {
-      // 若当前网关同样为 192.168.1.1（例如家庭 OpenWrt）且 macOS 未返回 SSID，静默显示未连接而非报错
       if (!ssidConfirmed && ["UNREACHABLE", "BAD_STATUS", "INVALID_JSON", "NOT_MIFI"].includes(err.message)) {
         finishIdle();
         return;
@@ -548,11 +532,11 @@ async function main() {
     let problem = "";
     if (home) {
       if (home.sim_status != null && String(home.sim_status) !== "0") {
-        problem = "SIM 卡未就绪";
+        problem = "SIM 未就绪";
       } else if (home.pin_status != null && String(home.pin_status) !== "0") {
-        problem = PIN_ERROR[String(home.pin_status)] || "SIM 卡待解锁";
+        problem = PIN_ERROR[String(home.pin_status)] || "SIM 待解锁";
       } else if (home.connect_disconnect === "disabled") {
-        problem = "蜂窝数据已关闭";
+        problem = "蜂窝已关闭";
       } else if (numeric(status.signal_quality) === 0) {
         problem = "无蜂窝信号";
       } else if (String(status.sys_mode) === "0" || !home.wan_ip || home.wan_ip === "0.0.0.0") {
@@ -566,12 +550,12 @@ async function main() {
 
     const sigBars = numeric(status.signal_quality);
     const sigMax = numeric(status.total_signal_quality) || 5;
-    const barsText = sigBars != null && sigBars >= 0 ? `${sigBars}/${sigMax} 格` : "—";
     const rssi = numeric(status.rssi);
     const dbmVal = lte && lte.rsrp != null ? lte.rsrp : rssi != null && rssi < 0 ? rssi : null;
-    const signalParts = [barsText];
+    const signalParts = [];
     if (dbmVal != null) signalParts.push(`${dbmVal} dBm`);
     if (lte && lte.sinr != null) signalParts.push(`SINR ${lte.sinr} dB`);
+    if (sigBars != null && sigBars >= 0) signalParts.push(`${sigBars}/${sigMax}`);
 
     const hasBattery = String(status.battery_connect) !== "0";
     const isFull = String(status.battery_charge) === "2" || String(status.battery_charge) === "3";
@@ -580,31 +564,27 @@ async function main() {
     const pct = isFull ? 100 : rawPct != null && rawPct >= 0 && rawPct <= 100 ? rawPct : null;
     const lowBattery = hasBattery && !isCharging && pct != null && pct <= 20;
 
-    let batteryLine;
+    let batteryPart;
     if (!hasBattery) {
-      batteryLine = "电量：USB 直供电（无电池）";
+      batteryPart = "USB 直供电";
     } else {
-      const stateTag = isFull ? "已充满" : isCharging ? "充电中" : lowBattery ? "电量偏低" : "电池供电";
-      batteryLine = `电量：${pct != null ? `${pct}%` : "—"} · ${stateTag}`;
+      const stateWord = isFull ? " 已充满" : isCharging ? " 充电中" : lowBattery ? " 低电量" : "";
+      batteryPart = `${pct != null ? `${pct}%` : "—"}${stateWord}`;
     }
 
     const clients = numeric(status.wifi_clients_num);
-    const maxClients = home ? numeric(home.max_access_number) : null;
-    const clientLabel =
-      clients != null && clients >= 0
-        ? maxClients && maxClients > 0
-          ? `${clients}/${maxClients} 台`
-          : `${clients} 台`
-        : "—";
+    const clientPart = clients != null && clients >= 0 ? `${clients} 台在线` : "";
 
     const lines = [
-      `速率：↓ ${formatSpeed(status.rx_speed)}   ↑ ${formatSpeed(status.tx_speed)}`,
-      totalBytes != null
-        ? `流量：${formatBytes(totalBytes)}（↓ ${formatCompactBytes(rxBytes)} · ↑ ${formatCompactBytes(txBytes)}）`
-        : "流量：—",
-      `信号：${signalParts.join(" · ")}`,
-      batteryLine,
-      `终端：${clientLabel} · 运行 ${formatUptime(status.run_seconds)}`,
+      row("速率", `↓ ${formatSpeed(status.rx_speed)}   ↑ ${formatSpeed(status.tx_speed)}`),
+      row(
+        "流量",
+        totalBytes != null
+          ? `${formatBytes(totalBytes)} · ↓ ${formatShortBytes(rxBytes)}  ↑ ${formatShortBytes(txBytes)}`
+          : "—"
+      ),
+      row("信号", signalParts.length > 0 ? signalParts.join(" · ") : "—"),
+      row("电量", clientPart ? `${batteryPart} · ${clientPart}` : batteryPart),
     ];
 
     const alerts = [];
@@ -613,10 +593,10 @@ async function main() {
     }
     const unreadSms = numeric(status.new_sms_num ?? status.new_sms);
     if (unreadSms != null && unreadSms > 0) {
-      alerts.push(`未读短信 ${unreadSms} 条`);
+      alerts.push(`新短信 ${unreadSms} 条`);
     }
     if (alerts.length > 0) {
-      lines.push(`提醒：${alerts.join(" · ")}`);
+      lines.push(row("提醒", alerts.join(" · ")));
     }
 
     const titleParts = [`${carrier}${radio ? ` ${radio}${bandTag}` : ""}`];
@@ -642,17 +622,17 @@ async function main() {
     return;
   }
 
-  // ==================== 面板 2：热点与设备详情 ====================
-  let home, security, wlan, pdp, eng, mss;
+  // ==================== 面板 2：热点与设备详情（4行清透布局） ====================
+  let home, status, security, wlan, pdp, mss;
   try {
-    [home, security, wlan] = await Promise.all([
+    [home, status, security] = await Promise.all([
       fetchJson("homepage_info", 4),
+      fetchJson("status_info", 4).catch(() => null),
       fetchJson("wlan_security_info", 4).catch(() => null),
-      fetchJson("wlan_info", 3).catch(() => null),
     ]);
-    [pdp, eng, mss] = await Promise.all([
+    [wlan, pdp, mss] = await Promise.all([
+      fetchJson("wlan_info", 3).catch(() => null),
       fetchJson("wan_pdp_context_info", 3).catch(() => null),
-      fetchJson("engineering_info", 3).catch(() => null),
       fetchJson("mss_support_info", 3).catch(() => null),
     ]);
     if (!home.lan_ip && !home.ssid && !home.imei) {
@@ -673,7 +653,7 @@ async function main() {
   const wifiOff = String(home.wlan_enable) === "0" || (wlan && String(wlan.wlan_enable) === "0");
   const channelNum = wlan ? numeric(wlan.channel) : null;
   const wifiBand = wlan && (String(wlan.rf_band) === "2" || (channelNum && channelNum > 14)) ? "5G" : "2.4G";
-  const chText = channelNum && channelNum > 0 ? `CH${channelNum}` : "自动信道";
+  const chText = channelNum && channelNum > 0 ? `CH${channelNum}` : "自动";
   const wifiBw = wlan ? (String(wlan.bandwidth) === "2" ? "40MHz" : String(wlan.bandwidth) === "1" ? "20MHz" : "") : "";
 
   const secMode = (security && security.mode) || "";
@@ -682,17 +662,17 @@ async function main() {
 
   if (showPwd) {
     if (!security) {
-      lines.push("密码：读取失败");
+      lines.push(row("密码", "读取失败"));
     } else if (["Open", "None", ""].includes(secMode)) {
-      lines.push("安全：开放网络（无需密码）");
+      lines.push(row("安全", "开放网络 · 无需密码"));
     } else {
       const secObj = security[secMode];
       const wifiKey = secObj && (secMode === "WEP" ? secObj.key1 : secObj.key || secObj.key1);
-      lines.push(`密码：${cleanText(wifiKey)} · ${secLabel}`);
+      lines.push(row("密码", `${cleanText(wifiKey)} · ${secLabel}`));
     }
   } else {
-    const hiddenTag = security && String(security.ssid_bcast) === "0" ? "隐藏 SSID" : "广播开启";
-    lines.push(`安全：${secLabel} · ${hiddenTag}`);
+    const bwPart = wifiBw ? ` · ${wifiBw}` : "";
+    lines.push(row("安全", `${secLabel}${bwPart}`));
   }
 
   const activePdp =
@@ -702,34 +682,22 @@ async function main() {
   const rawWanIp = (activePdp && activePdp.ipv4) || home.wan_ip || "";
   const wanIp = rawWanIp && rawWanIp !== "0.0.0.0" ? rawWanIp : "";
   const ipv6Ready = activePdp ? hasValidGlobalIPv6(activePdp.g_ipv6) : false;
-  lines.push(wanIp ? `出口：${wanIp} · ${ipv6Ready ? "IPv6 已就绪" : "仅 IPv4"}` : "出口：蜂窝未拨号");
+  lines.push(row("网络", wanIp ? `${wanIp} · ${ipv6Ready ? "IPv6 就绪" : "仅 IPv4"}` : "蜂窝未拨号"));
 
   const simInfo = parseSimSummary(mss);
   if (simInfo && simInfo.slotsLine) {
-    lines.push(`卡槽：${simInfo.slotsLine}`);
+    lines.push(row("卡槽", simInfo.slotsLine));
   } else if (home.iccid) {
     const iccid = String(home.iccid).trim();
     const masked = iccid.length > 10 ? `${iccid.slice(0, 6)}…${iccid.slice(-4)}` : iccid;
-    lines.push(`卡号：${masked}`);
+    lines.push(row("卡号", masked));
   }
 
-  const lte = parseLteMetrics(eng);
-  if (lte) {
-    const rfParts = [];
-    if (lte.band) rfParts.push(`B${lte.band}${lte.bw ? ` ${lte.bw}` : ""}`);
-    if (lte.pci) rfParts.push(`PCI ${lte.pci}`);
-    if (lte.rsrq != null) rfParts.push(`RSRQ ${lte.rsrq} dB`);
-    else if (lte.earfcn) rfParts.push(`频点 ${lte.earfcn}`);
-    if (rfParts.length > 0) lines.push(`工参：${rfParts.join(" · ")}`);
-  }
-
-  const model = cleanText(home.device_name || home.device_model || home.hw_version, "");
   const adminAddr = cleanText(home.lan_ip, hostNoProto);
-  lines.push(`后台：${adminAddr}${model ? ` · 型号 ${model}` : ""}`);
+  const runSec = (status && status.run_seconds) ?? (activePdp && activePdp.curconntime);
+  lines.push(row("后台", `${adminAddr} · 运行 ${formatUptime(runSec)}`));
 
-  const detailTitle = wifiOff
-    ? `${ssidName} · Wi-Fi 已关闭`
-    : `${ssidName} · ${wifiBand} ${chText}${wifiBw ? ` (${wifiBw})` : ""}`;
+  const detailTitle = wifiOff ? `${ssidName} · Wi-Fi 已关闭` : `${ssidName} · ${wifiBand} ${chText}`;
 
   $done({
     title: detailTitle,
