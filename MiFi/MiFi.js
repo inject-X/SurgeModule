@@ -76,8 +76,10 @@ const WIFI_SECURITY = {
   None: "开放网络",
 };
 
+const GAP = "   ";
+
 function row(label, value) {
-  return `${label}\u3000${value}`;
+  return `${label}：${value}`;
 }
 
 function numeric(value) {
@@ -179,8 +181,8 @@ function parseSimSummary(mss) {
     return smartSwitch ? "智能选网" : null;
   }
   const slot = simSlotName(activeSim.sim_id, activeSim.sim_name, false);
-  const banned = String(activeSim.sim_banned) === "1" ? " · 已禁用" : "";
-  return `${slot}${smartSwitch ? " · 智能选网" : ""}${banned}`;
+  const banned = String(activeSim.sim_banned) === "1" ? `${GAP}已禁用` : "";
+  return `${slot}${smartSwitch ? `${GAP}智能选网` : ""}${banned}`;
 }
 
 const LTE_DL_BW = {
@@ -550,17 +552,17 @@ async function main() {
 
   let wifiLine;
   if (wifiOff) {
-    wifiLine = `${ssidName} · 已关闭`;
+    wifiLine = `${ssidName}${GAP}已关闭`;
   } else if (showPwd && security) {
     if (["Open", "None", ""].includes(secMode)) {
-      wifiLine = `${ssidName} · 开放网络`;
+      wifiLine = `${ssidName}${GAP}开放网络`;
     } else {
       const secObj = security[secMode];
       const wifiKey = cleanText(secObj && (secMode === "WEP" ? secObj.key1 : secObj.key || secObj.key1), "");
-      wifiLine = `${ssidName} · ${wifiKey || secLabel}`;
+      wifiLine = `${ssidName}${GAP}${wifiKey || secLabel}`;
     }
   } else {
-    wifiLine = `${ssidName} · ${secLabel}`;
+    wifiLine = `${ssidName}${GAP}${secLabel}`;
   }
 
   // 5. 后台与运行时长
@@ -568,12 +570,12 @@ async function main() {
   const uptimeText = formatUptime(status.run_seconds);
 
   const lines = [
-    row("信号", signalParts.length > 0 ? signalParts.join(" · ") : "—"),
-    row("电量", clientPart ? `${batteryPart} · ${clientPart}` : batteryPart),
+    row("信号", signalParts.length > 0 ? signalParts.join(GAP) : "—"),
+    row("电量", clientPart ? `${batteryPart}${GAP}${clientPart}` : batteryPart),
     row(
       "流量",
       totalBytes != null
-        ? `${formatBytes(totalBytes)} · ↓ ${formatShortBytes(rxBytes)}  ↑ ${formatShortBytes(txBytes)}`
+        ? `${formatBytes(totalBytes)}${GAP}↓ ${formatShortBytes(rxBytes)}  ↑ ${formatShortBytes(txBytes)}`
         : "—"
     ),
   ];
@@ -582,7 +584,7 @@ async function main() {
     lines.push(row("卡槽", simInfo));
   }
   lines.push(row("热点", wifiLine));
-  lines.push(row("后台", `${adminAddr} · 运行 ${uptimeText}`));
+  lines.push(row("后台", `${adminAddr}${GAP}运行 ${uptimeText}`));
 
   const alerts = [];
   if (String(status.roaming) === "1" || (home && String(home.roaming) === "1")) {
@@ -593,16 +595,16 @@ async function main() {
     alerts.push(`新短信 ${unreadSms} 条`);
   }
   if (alerts.length > 0) {
-    lines.push(row("提醒", alerts.join(" · ")));
+    lines.push(row("提醒", alerts.join(GAP)));
   }
 
   let title;
   if (problem) {
-    title = `${carrier} · ${problem}`;
+    title = `${carrier}  ${problem}`;
   } else if (radio && lte && lte.band) {
-    title = `${carrier} ${radio} · B${lte.band}${lte.bw ? ` ${lte.bw}` : ""}`;
+    title = `${carrier} ${radio}  B${lte.band}${lte.bw ? ` ${lte.bw}` : ""}`;
   } else if (radio) {
-    title = `${carrier} · ${radio}`;
+    title = `${carrier} ${radio}`;
   } else {
     title = carrier;
   }
