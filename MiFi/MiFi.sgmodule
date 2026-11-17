@@ -1,14 +1,14 @@
 #!name=随身WiFi面板
-#!desc=连接指定 Wi-Fi(默认 leshi)时,显示「实时状态」和「设备详情」两个面板
+#!desc=连接随身 Wi-Fi 时自动展示「蜂窝实时状态」与「热点设备详情」双面板，支持三网切卡识别、4G 频段/工参指标及自动鉴权。
 #!category=Panel
-#!arguments=SSID:leshi,HOST:192.168.100.1,SHOW_PWD:1,INTERVAL:5
-#!arguments-desc=SSID: 触发面板的Wi-Fi名称\nHOST: 随身WiFi后台地址\nSHOW_PWD: 1=详情面板显示Wi-Fi密码(默认显示,0为隐藏)\nINTERVAL: 实时状态刷新间隔(秒)
+#!arguments=SSID:Wi-Fi,HOST:192.168.1.1,SHOW_PWD:1,INTERVAL:5,USER:admin,ADMIN_PWD:admin
+#!arguments-desc=SSID: 触发面板的随身 Wi-Fi 名称（填 * 则仅按后台网关自动识别）\nHOST: 随身 Wi-Fi 后台地址（默认 192.168.1.1）\nSHOW_PWD: 详情面板显示 Wi-Fi 密码（1=显示，0=隐藏）\nINTERVAL: 实时状态面板刷新间隔（秒）\nUSER: 后台账号（默认 admin，仅接口需鉴权时自动使用）\nADMIN_PWD: 后台密码（默认 admin）
 
 [Panel]
-MiFiStatus = script-name=MiFiStatus,update-interval={{{INTERVAL}}}
-MiFiDetail = script-name=MiFiDetail,update-interval=60
+MiFiStatus = script-name=MiFiStatus,title=随身WiFi状态,content=正在读取设备状态…,update-interval={{{INTERVAL}}}
+MiFiDetail = script-name=MiFiDetail,title=随身WiFi详情,content=正在读取设备详情…,update-interval=60
 
 [Script]
-# 把 script-path 换成你自己托管 MiFi.js 的地址(GitHub raw / iCloud / 本地文件均可)
-MiFiStatus = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=mode=status&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
-MiFiDetail = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=mode=detail&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}
+# 本地 Mac 测试直接指向下方文件路径；若需 iPhone / Mac 多端同步，可将 MiFi.js 放入 Surge iCloud 目录的 JavaScript/MiFi.js 并改为 script-path=JavaScript/MiFi.js（或托管至 GitHub Raw）
+MiFiStatus = type=generic,timeout=8,script-path=/Users/void/Downloads/MiFi.js,argument=mode=status&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}&user={{{USER}}}&admin_pwd={{{ADMIN_PWD}}}
+MiFiDetail = type=generic,timeout=8,script-path=/Users/void/Downloads/MiFi.js,argument=mode=detail&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}&user={{{USER}}}&admin_pwd={{{ADMIN_PWD}}}
