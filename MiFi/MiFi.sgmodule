@@ -1,13 +1,11 @@
 #!name=随身WiFi面板
-#!desc=连接随身 Wi-Fi 时自动展示「蜂窝实时状态」与「热点设备详情」双面板，支持三网切卡识别、4G 频段/工参指标及自动鉴权。
+#!desc=连接随身 Wi-Fi 时展示蜂窝频段、信号质量、流量电量、当前卡槽与热点信息，进入页面自动刷新，同时适配 iOS 桌面小组件。
 #!category=Panel
-#!arguments=SSID:Wi-Fi,HOST:192.168.1.1,SHOW_PWD:1,INTERVAL:5,USER:admin,ADMIN_PWD:admin
-#!arguments-desc=SSID: 触发面板的随身 Wi-Fi 名称（填 * 则仅按后台网关自动识别）\nHOST: 随身 Wi-Fi 后台地址（默认 192.168.1.1）\nSHOW_PWD: 详情面板显示 Wi-Fi 密码（1=显示，0=隐藏）\nINTERVAL: 实时状态面板刷新间隔（秒）\nUSER: 后台账号（默认 admin，仅接口需鉴权时自动使用）\nADMIN_PWD: 后台密码（默认 admin）
+#!arguments=SSID:Wi-Fi,HOST:192.168.1.1,SHOW_PWD:1,USER:admin,ADMIN_PWD:admin
+#!arguments-desc=SSID: 随身 Wi-Fi 名称（填 * 则仅按网关识别，iOS 未授予定位权限也可正常使用）\nHOST: 随身 Wi-Fi 后台地址（默认 192.168.1.1）\nSHOW_PWD: 是否显示热点密码（1=显示，0=隐藏，放桌面小组件可按需设为 0）\nUSER: 后台账号（默认 admin，仅接口需鉴权时自动使用）\nADMIN_PWD: 后台密码（默认 admin）
 
 [Panel]
-MiFiStatus = script-name=MiFiStatus,title=随身WiFi状态,content=正在读取设备状态…,update-interval={{{INTERVAL}}}
-MiFiDetail = script-name=MiFiDetail,title=随身WiFi详情,content=正在读取设备详情…,update-interval=60
+MiFi = script-name=MiFi,title=随身 Wi-Fi,content=正在读取设备状态…,update-interval=1
 
 [Script]
-MiFiStatus = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=mode=status&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}&user={{{USER}}}&admin_pwd={{{ADMIN_PWD}}}
-MiFiDetail = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=mode=detail&ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}&user={{{USER}}}&admin_pwd={{{ADMIN_PWD}}}
+MiFi = type=generic,timeout=8,script-path=https://raw.githubusercontent.com/inject-X/SurgeModule/main/MiFi/MiFi.js,argument=ssid={{{SSID}}}&host={{{HOST}}}&pwd={{{SHOW_PWD}}}&user={{{USER}}}&admin_pwd={{{ADMIN_PWD}}}
