@@ -183,15 +183,37 @@ function parseSimSummary(mss) {
   return `${slot}${smartSwitch ? " · 智能选网" : ""}${banned}`;
 }
 
+const LTE_DL_BW = {
+  "0": "1.4MHz",
+  "1": "3MHz",
+  "2": "5MHz",
+  "3": "10MHz",
+  "4": "15MHz",
+  "5": "20MHz",
+  "10": "10MHz",
+  "15": "15MHz",
+  "20": "20MHz",
+};
+
+function resolveDlBandwidth(raw) {
+  if (raw == null) return "";
+  const s = String(raw).trim();
+  if (!s) return "";
+  if (LTE_DL_BW[s]) return LTE_DL_BW[s];
+  const m = s.match(/^(\d+(?:\.\d+)?)\s*mhz$/i);
+  return m ? `${m[1]}MHz` : "";
+}
+
 function parseLteMetrics(eng) {
   if (!eng || String(eng.sys_mode) !== "17" || !eng.lte || typeof eng.lte !== "object") return null;
   const lte = eng.lte;
   if (!lte.band && lte.rsrp == null && lte.sinr == null) return null;
   const band = cleanText(lte.band, "");
+  const bw = resolveDlBandwidth(lte.dlBandwidth);
   const rawRsrp = numeric(lte.rsrp);
   const rsrp = rawRsrp == null ? null : rawRsrp < 0 ? rawRsrp : rawRsrp - 141;
   const sinr = numeric(lte.sinr);
-  return { band, rsrp, sinr };
+  return { band, bw, rsrp, sinr };
 }
 
 // 纯 JS MD5 (RFC 1321)，仅当后台要求 Digest 鉴权时自动无感登录
@@ -470,7 +492,6 @@ async function main() {
   const carrier = home ? resolveCarrier(home.iccid, home.network_name) : "蜂窝网络";
   const radio = RADIO_MODE[String(status.sys_mode ?? "")] || "";
   const lte = parseLteMetrics(eng);
-  const bandTag = lte && lte.band ? ` B${lte.band}` : "";
   const simInfo = parseSimSummary(mss);
 
   let problem = "";
@@ -575,11 +596,15 @@ async function main() {
     lines.push(row("提醒", alerts.join(" · ")));
   }
 
-  const titleParts = [carrier];
+  let title;
   if (problem) {
-    titleParts.push(problem);
+    title = `${carrier} · ${problem}`;
+  } else if (radio && lte && lte.band) {
+    title = `${carrier} ${radio} · B${lte.band}${lte.bw ? ` ${lte.bw}` : ""}`;
   } else if (radio) {
-    titleParts.push(`${radio}${bandTag}`);
+    title = `${carrier} · ${radio}`;
+  } else {
+    title = carrier;
   }
 
   const weakSignal = (sigBars != null && sigBars <= 1) || (lte && lte.rsrp != null && lte.rsrp <= -110);
@@ -590,7 +615,7 @@ async function main() {
       : COLORS.online;
 
   $done({
-    title: titleParts.join(" · "),
+    title,
     content: lines.join("\n"),
     icon: problem ? "exclamationmark.triangle.fill" : "antenna.radiowaves.left.and.right",
     "icon-color": iconColor,
